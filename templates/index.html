@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LL Sims4 Auto Updater</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>LL Sims 4 Auto Updater</h1>
+
+      <section class="panel">
+        <h2>Настройки</h2>
+        <div class="grid">
+          <label>Папка Mods
+            <input id="mods_dir" type="text" />
+          </label>
+          <label>Метод деплоя
+            <select id="deploy_method">
+              <option value="copy">copy</option>
+              <option value="hardlink">hardlink</option>
+              <option value="symlink">symlink</option>
+            </select>
+          </label>
+          <label>Сканировать страниц каталога
+            <input id="scan_pages" type="number" min="1" max="400" />
+          </label>
+          <label>Интервал автообновления (мин)
+            <input id="poll_minutes" type="number" min="1" />
+          </label>
+          <label>Тик очереди (сек)
+            <input id="queue_poll_seconds" type="number" min="2" />
+          </label>
+          <label>Max metadata/check run
+            <input id="max_metadata_checks_per_run" type="number" min="1" />
+          </label>
+          <label>Metadata delay min (сек)
+            <input id="metadata_min_delay_seconds" type="number" min="0" />
+          </label>
+          <label>Metadata delay max (сек)
+            <input id="metadata_max_delay_seconds" type="number" min="0" />
+          </label>
+          <label>Download delay min (сек)
+            <input id="download_min_delay_seconds" type="number" min="0" />
+          </label>
+          <label>Download delay max (сек)
+            <input id="download_max_delay_seconds" type="number" min="0" />
+          </label>
+          <label>Max downloads/hour
+            <input id="max_downloads_per_hour" type="number" min="1" />
+          </label>
+          <label>Max downloads/day
+            <input id="max_downloads_per_day" type="number" min="1" />
+          </label>
+          <label>Backoff base (мин)
+            <input id="backoff_base_minutes" type="number" min="1" />
+          </label>
+          <label>Backoff max (мин)
+            <input id="backoff_max_minutes" type="number" min="1" />
+          </label>
+          <label>Retry limit per item
+            <input id="queue_retry_limit" type="number" min="1" />
+          </label>
+          <label>Cooldown on 429 (мин)
+            <input id="cooldown_429_minutes" type="number" min="1" />
+          </label>
+          <label>Cooldown on 503 (мин)
+            <input id="cooldown_503_minutes" type="number" min="1" />
+          </label>
+          <label>Hard cooldown (часы)
+            <input id="cooldown_hard_block_hours" type="number" min="1" />
+          </label>
+          <label class="full">Cookie (из залогиненного браузера)
+            <textarea id="ll_cookie" rows="2"></textarea>
+          </label>
+          <label class="full">User-Agent
+            <input id="user_agent" type="text" />
+          </label>
+          <label>
+            <input id="auto_tracking_enabled" type="checkbox" />
+            Включить автообновление по таймеру
+          </label>
+          <label>
+            <input id="queue_worker_enabled" type="checkbox" />
+            Включить обработку очереди
+          </label>
+        </div>
+        <div class="row">
+          <button id="save_settings">Сохранить настройки</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Действия</h2>
+        <div class="row">
+          <button id="discover">Обновить список модов</button>
+          <button id="check_only">Проверить обновления</button>
+          <button id="update_enabled">Поставить обновления в очередь</button>
+          <button id="process_queue_once">Обработать 1 элемент очереди</button>
+          <button id="clear_done_queue">Очистить done из очереди</button>
+        </div>
+        <div class="row">
+          <input id="custom_url" type="text" placeholder="https://www.loverslab.com/files/file/..." />
+          <button id="add_mod">Добавить мод по URL</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Моды</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Auto</th>
+              <th>ID</th>
+              <th>Название</th>
+              <th>Текущая</th>
+              <th>Удаленная</th>
+              <th>Статус</th>
+              <th>Папка установки</th>
+            </tr>
+          </thead>
+          <tbody id="mods_table"></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>Очередь</h2>
+        <pre id="queue_info"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Лог</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
