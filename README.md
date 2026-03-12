@@ -1,47 +1,126 @@
 # LL Sims 4 Mod Manager (LoversLab)
 
-Локальный менеджер модов для `The Sims 4` с автообновлением LoversLab-модов.
+Local mod manager for **The Sims 4** with automatic LoversLab update tracking and installation.
 
-Основная идея для пользователя:
-- сделать один полный sync,
-- отметить нужные моды галочкой `Auto`,
-- дальше нажимать `Check updates now` (или оставить фоновую автопроверку).
+User flow is simple:
+1. Run one initial full sync.
+2. Enable `Auto` for mods you want managed.
+3. Use `Check updates now` (or leave background auto-check enabled).
 
-Внутренние очереди и лимиты работают автоматически, пользователю в них лезть не нужно.
+Queueing, throttling, retries, and cooldowns are internal and automatic.
 
-## Что умеет
+## Key Features
 
-- полный каталог Sims 4 (подкатегории LL, включая новые),
-- фильтры/сортировка/карточка мода,
-- автообновление только выбранных (`Auto`) модов,
-- безопасные лимиты скачивания и backoff,
-- деплой в `Mods/<manager_root_subdir>/<mod_id>_<slug>/...`,
-- методы деплоя: `hardlink` (по умолчанию), `copy`, `symlink`,
-- режим картинок:
-  - `Local cache (recommended)`,
-  - `Direct from site` (без локального image cache).
+- Full Sims 4 catalog discovery (dynamic subcategories, including new ones)
+- Mod list with search/filter/sort and details card
+- Auto-update only for enabled (`Auto`) mods
+- Safe download throttling and retry/backoff logic
+- Deploy into `Mods/<manager_root_subdir>/<mod_id>_<slug>/...`
+- Deploy methods: `hardlink` (default), `copy`, `symlink`
+- Image mode:
+  - `Local cache (recommended)`
+  - `Direct from site`
+- Optional strict proxy mode for all app-side LoversLab traffic
 
-## Требования
+## Requirements
 
 - Windows
-- Для архивов `.rar`/`.7z`: установленный 7-Zip (`7z.exe`)
+- 7-Zip installed for `.rar` / `.7z` archives (`7z.exe`)
 
-## Установка (для обычного пользователя)
+## End-User Install (No Terminal)
 
-1. Скачай `LL-Sims4-Mod-Manager.exe` из релиза.
-2. Помести `.exe` в отдельную папку (например `C:\LL\Manager`).
-3. Дважды кликни `.exe`.
-4. Страница откроется в браузере автоматически: `http://127.0.0.1:8765`.
+1. Download `LL-Sims4-Mod-Manager.exe` from Releases.
+2. Put the `.exe` in its own folder (for example: `C:\LL\Manager`).
+3. Double-click the `.exe`.
+4. Browser opens automatically at `http://127.0.0.1:8765`.
 
-Примечание:
-- при первом запуске Windows SmartScreen может спросить подтверждение,
-- папка `data` создается рядом с `.exe`.
+Notes:
+- On first run, Windows SmartScreen may ask for confirmation.
+- A `data` folder is created next to the `.exe`.
 
-## Запуск
+## First Run Setup
 
-- обычный запуск: снова двойной клик по `.exe`
+In `Settings`:
 
-### Для продвинутого пользователя (опционально)
+1. `Mods folder` -> select your `The Sims 4\Mods` folder
+2. `Manager root subfolder` -> keep `_LL_MOD_MANAGER` unless you need custom
+3. `Deploy method` -> keep `hardlink` (recommended)
+4. Paste `Cookie` from your logged-in LoversLab browser session
+5. Enable proxy if needed
+6. Click `Save settings`
+
+Then in `Actions`:
+
+1. Click `Full sync (all categories + cache refresh)`
+2. Go to `Mods`, enable `Auto` for desired mods
+3. Click `Check updates now`
+
+## Daily Use
+
+- `Check updates now` checks enabled mods and automatically starts installing updates.
+- You can also leave background auto-tracking enabled.
+
+## Auto Checkbox Behavior
+
+If you disable (`Auto` off) a mod:
+
+- It is excluded from automatic updates
+- Its deployed files are automatically removed from the game `Mods` folder
+- Pending internal install tasks for that mod are automatically removed
+
+## Buttons (Simple Explanation)
+
+- `Full sync (all categories + cache refresh)`
+  - Full Sims 4 catalog pass and metadata/cache refresh
+
+- `Check updates now`
+  - Checks enabled mods and auto-installs available updates
+
+## Image Source Modes
+
+`Settings -> Image source mode`:
+
+- `Local cache (recommended)`
+  - Faster card rendering after cache warm-up, fewer remote requests at view time
+
+- `Direct from site`
+  - Loads card images directly from LoversLab, no local image cache usage for display
+
+## Important Limits
+
+- `hardlink` works only within the same drive/volume
+- `symlink` on Windows may require Developer Mode or elevated privileges
+- Zero-ban-risk does not exist; conservative throttling and backoff are used
+
+## Troubleshooting
+
+- If `.exe` does not start: check SmartScreen/antivirus and try again
+- If downloads fail: verify LoversLab cookie is still valid
+- If proxy mode is enabled: verify proxy is alive and correctly configured
+- For `.rar`/`.7z` extraction errors: install 7-Zip
+
+## Maintainer: Release via GitHub Actions
+
+Releases are built and published by GitHub Actions workflow:
+`/.github/workflows/release.yml`
+
+To create a release:
+
+```bash
+git tag v0.1.2
+git push origin v0.1.2
+```
+
+Workflow does this automatically:
+
+- builds `LL-Sims4-Mod-Manager.exe` on `windows-latest`
+- creates/updates GitHub Release for that tag
+- uploads the `.exe` as a Release asset
+- uploads the `.exe` as a workflow artifact
+
+## Advanced: Run from Source (Optional)
+
+If you want to run from source instead of the `.exe`:
 
 ```powershell
 python -m venv .venv
@@ -50,77 +129,10 @@ python -m pip install -r requirements.txt
 python launcher.py
 ```
 
-## Первый запуск (рекомендуемый сценарий)
+## Data Files
 
-1. Вкладка `Settings`:
-   - `Mods folder` -> выбери папку `The Sims 4\Mods`,
-   - `Manager root subfolder` -> оставь `_LL_MOD_MANAGER`,
-   - `Deploy method` -> оставь `hardlink` (рекомендуется),
-   - вставь `Cookie` из залогиненного LL-браузера,
-   - при необходимости включи прокси,
-   - `Save settings`.
-2. Вкладка `Actions` -> нажми `Full sync (all categories + cache refresh)`.
-3. Вкладка `Mods` -> отметь нужные моды чекбоксом `Auto`.
-4. Нажми `Check updates now`.
-
-Дальше менеджер будет сам проверять/ставить обновления для включенных модов.
-
-## Поведение галочки Auto
-
-Если снять `Auto` у мода:
-- мод исключается из автообновления,
-- его файлы автоматически удаляются из игрового каталога `Mods`,
-- pending-задачи по этому моду автоматически убираются.
-
-## Кнопки (простыми словами)
-
-- `Full sync (all categories + cache refresh)`:
-  полный проход каталога Sims 4 + обновление данных карточек/кэша (если выбран cache-режим картинок).
-- `Check updates now`:
-  проверяет включенные моды и автоматически запускает установку найденных обновлений.
-
-## Режимы картинок
-
-`Settings -> Image source mode`:
-- `Local cache (recommended)`:
-  быстрее карточка, меньше внешних запросов в момент просмотра.
-- `Direct from site`:
-  без локального image cache, картинки грузятся напрямую с LL.
-
-## Важные ограничения
-
-- `hardlink` работает только в пределах одного тома (диска).
-- `symlink` на Windows может требовать Developer Mode/права.
-- Нулевого риска блокировки на LL не существует; используются консервативные лимиты и backoff.
-
-## Если что-то не работает
-
-- Если `.exe` не стартует: проверь Windows SmartScreen/антивирус и запусти еще раз.
-- Проверь, что cookie актуален (просроченный cookie часто дает login/challenge вместо файла).
-- При включенном proxy mode убедись, что прокси живой и корректный.
-- Для `.rar`/`.7z` установи 7-Zip.
-
-## Где хранятся данные
-
-- `data/mods.json` — список модов и их состояние
-- `data/settings.json` — настройки
-- `data/queue.json` — внутренняя очередь установок
-- `data/runtime.json` — runtime-лимиты/cursor-и
-- `data/media_cache/` — локальный кеш картинок (если режим cache)
-
-## Релиз через GitHub Actions (для сопровождения)
-
-Пайплайн релиза полностью через GitHub Actions:
-
-1. Создай тег версии (например `v0.1.2`) и отправь его в `origin`.
-2. Workflow `.github/workflows/release.yml` автоматически:
-   - собирает `LL-Sims4-Mod-Manager.exe` на `windows-latest`,
-   - публикует `.exe` в GitHub Release этого тега,
-   - сохраняет `.exe` как workflow artifact.
-
-Команды:
-
-```bash
-git tag v0.1.2
-git push origin v0.1.2
-```
+- `data/mods.json` - mod records and state
+- `data/settings.json` - app settings
+- `data/queue.json` - internal install queue
+- `data/runtime.json` - runtime limits/cursors
+- `data/media_cache/` - local image cache (when cache mode is enabled)

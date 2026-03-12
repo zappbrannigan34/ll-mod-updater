@@ -138,6 +138,10 @@ const I18N = {
     discoverElapsed: "Elapsed",
     discoverCategory: "Current category",
     discoverCategoryPages: "Category pages",
+    discoverResume: "Resumed from",
+    discoverCheckpoint: "Checkpoint",
+    discoverRetries: "Retries",
+    discoverBackoff: "Retry backoff",
     discoverCategories: "Categories",
     discoverMods: "Mods",
     discoverCache: "Cache pass",
@@ -266,6 +270,10 @@ const I18N = {
     discoverElapsed: "Прошло",
     discoverCategory: "Текущая категория",
     discoverCategoryPages: "Страницы категории",
+    discoverResume: "Возобновлено с",
+    discoverCheckpoint: "Чекпоинт",
+    discoverRetries: "Повторы",
+    discoverBackoff: "Пауза перед повтором",
     discoverCategories: "Категории",
     discoverMods: "Моды",
     discoverCache: "Проход кэша",
@@ -621,6 +629,25 @@ function renderDiscoverProgress(progress) {
   const lines = [];
   lines.push(`${t("discoverStage")}: ${progress.stage || "-"}`);
   lines.push(`${t("discoverElapsed")}: ${formatDuration(progress.elapsed_seconds || 0)}`);
+
+  if (progress.resumed_from_checkpoint) {
+    lines.push(`${t("discoverResume")}: category_index=${Number(progress.checkpoint_category_index || 0)}, page=${Number(progress.checkpoint_page || 1)}`);
+  }
+
+  if (progress.last_checkpoint_at) {
+    lines.push(`${t("discoverCheckpoint")}: ${progress.last_checkpoint_at} (${progress.checkpoint_status || "-"})`);
+  }
+
+  const retriesTotal = Number(progress.retries_total || 0);
+  const retriesCurrent = Number(progress.retry_count_current || 0);
+  if (retriesTotal > 0 || retriesCurrent > 0) {
+    lines.push(`${t("discoverRetries")}: total=${retriesTotal}, current=${retriesCurrent}`);
+  }
+
+  const retryBackoff = Number(progress.retry_backoff_seconds || 0);
+  if (retryBackoff > 0) {
+    lines.push(`${t("discoverBackoff")}: ${formatDuration(retryBackoff)}`);
+  }
 
   if (progress.current_category_name || progress.current_category_id) {
     lines.push(`${t("discoverCategory")}: ${progress.current_category_name || "-"} (${progress.current_category_id || "-"})`);
