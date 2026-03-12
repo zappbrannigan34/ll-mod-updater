@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from .config import (
+    CATEGORIES_FILE,
     DATA_DIR,
     DEFAULT_SETTINGS,
+    MEDIA_CACHE_DIR,
     MODS_FILE,
     QUEUE_FILE,
     RUNTIME_FILE,
@@ -14,6 +16,7 @@ from .config import (
 )
 
 DEFAULT_QUEUE = {"items": []}
+DEFAULT_CATEGORIES = {"categories": [], "updated_at": ""}
 
 DEFAULT_RUNTIME = {
     "download_events": [],
@@ -23,6 +26,9 @@ DEFAULT_RUNTIME = {
     "last_signal": "",
     "last_error": "",
     "last_queue_action": "",
+    "lazy_new_mods_cursor": 0,
+    "lazy_new_mods_failed_categories": [],
+    "lazy_cache_retry_cursor": 0,
 }
 
 
@@ -37,6 +43,7 @@ class Store:
 
     def _ensure_files(self) -> None:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
+        MEDIA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         Path(DEFAULT_SETTINGS["staging_dir"]).mkdir(parents=True, exist_ok=True)
         Path(DEFAULT_SETTINGS["downloads_dir"]).mkdir(parents=True, exist_ok=True)
         Path(DEFAULT_SETTINGS["backups_dir"]).mkdir(parents=True, exist_ok=True)
@@ -46,6 +53,9 @@ class Store:
 
         if not MODS_FILE.exists():
             MODS_FILE.write_text(json.dumps({"mods": []}, indent=2), encoding="utf-8")
+
+        if not CATEGORIES_FILE.exists():
+            CATEGORIES_FILE.write_text(json.dumps(DEFAULT_CATEGORIES, indent=2), encoding="utf-8")
 
         if not QUEUE_FILE.exists():
             QUEUE_FILE.write_text(json.dumps(DEFAULT_QUEUE, indent=2), encoding="utf-8")
@@ -91,6 +101,21 @@ class Store:
     def save_mods(self, mods: list[dict[str, Any]]) -> None:
         with self._lock:
             self._write_json(MODS_FILE, {"mods": mods})
+
+    def get_categories(self) -> dict[str, Any]:
+        with self._lock:
+            data = self._read_json(CATEGORIES_FILE, DEFAULT_CATEGORIES)
+            merged = _deep_copy(DEFAULT_CATEGORIES)
+            if isinstance(data, dict):
+                merged.update(data)
+            categories = merged.get("categories", [])
+            if not isinstance(categories, list):
+                merged["categories"] = []
+            return merged
+
+    def save_categories(self, categories: list[dict[str, Any]], updated_at: str) -> None:
+        with self._lock:
+            self._write_json(CATEGORIES_FILE, {"categories": categories, "updated_at": updated_at})
 
     def get_queue(self) -> list[dict[str, Any]]:
         with self._lock:
