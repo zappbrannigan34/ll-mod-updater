@@ -422,24 +422,31 @@ def discover_mods_in_category(
     settings: dict,
     max_pages: int | None = None,
     page_delay_seconds: float = 0,
-    on_page: Callable[[int, int, int], None] | None = None,
+    start_page: int = 1,
+    on_page: Callable[[int, int, int, list[dict]], None] | None = None,
 ) -> list[dict]:
     category_url = str(category.get("url") or "").strip()
     if not category_url:
         return []
 
-    first_html = _get_html(_category_page_url(category_url, 1), settings)
+    start_page = max(1, int(start_page or 1))
+
+    first_html = _get_html(_category_page_url(category_url, start_page), settings)
     first_soup = BeautifulSoup(first_html, "html.parser")
     last_page = _extract_last_page(first_soup)
     if max_pages is not None:
         last_page = max(1, min(last_page, int(max_pages)))
 
+    if start_page > last_page:
+        return []
+
     found: dict[str, dict] = {}
 
-    def parse_page_soup(soup: BeautifulSoup) -> None:
+    def parse_page_soup(soup: BeautifulSoup) -> list[dict]:
+        page_items: dict[str, dict] = {}
         table = soup.select_one(".cDownloadsCategoryTable")
         if table is None:
-            return
+            return []
 
         rows = table.select("ol.ipsDataList li.ipsDataItem")
 
@@ -464,7 +471,7 @@ def discover_mods_in_category(
 
             existing = found.get(mod_id)
             if existing is None:
-                found[mod_id] = {
+                entry = {
                     "id": mod_id,
                     "title": title,
                     "url": normalize_mod_url(full_url),
@@ -473,23 +480,37 @@ def discover_mods_in_category(
                     "downloads_count": downloads_count,
                     "thumbnail_url": thumbnail_url,
                 }
+                found[mod_id] = entry
+                page_items[mod_id] = dict(entry)
             else:
                 if existing.get("title", "").startswith("Mod ") and title:
                     existing["title"] = title
                 existing["downloads_count"] = max(int(existing.get("downloads_count") or 0), downloads_count)
                 if not existing.get("thumbnail_url") and thumbnail_url:
                     existing["thumbnail_url"] = thumbnail_url
+                page_items[mod_id] = dict(existing)
 
-    parse_page_soup(first_soup)
+        items = list(page_items.values())
+        items.sort(key=lambda x: int(x["id"]) if x["id"].isdigit() else x["id"])
+        return items
+
+    first_page_items = parse_page_soup(first_soup)
     if on_page is not None:
-        on_page(1, last_page, len(found))
+        try:
+            on_page(start_page, last_page, len(found), first_page_items)
+        except TypeError:
+            # backward compatibility for old callback signatures
+            on_page(start_page, last_page, len(found))  # type: ignore[misc]
 
-    for page in range(2, last_page + 1):
+    for page in range(start_page + 1, last_page + 1):
         page_html = _get_html(_category_page_url(category_url, page), settings)
         page_soup = BeautifulSoup(page_html, "html.parser")
-        parse_page_soup(page_soup)
+        page_items = parse_page_soup(page_soup)
         if on_page is not None:
-            on_page(page, last_page, len(found))
+            try:
+                on_page(page, last_page, len(found), page_items)
+            except TypeError:
+                on_page(page, last_page, len(found))  # type: ignore[misc]
         if page_delay_seconds > 0:
             import time
 

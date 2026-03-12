@@ -152,9 +152,53 @@ class ModUpdater:
             "details_total_target": 0,
             "details_done": 0,
             "details_errors": 0,
+            "resumed_from_checkpoint": False,
+            "checkpoint_status": "idle",
+            "checkpoint_category_index": 0,
+            "checkpoint_page": 1,
+            "last_checkpoint_at": "",
+            "retries_total": 0,
+            "retry_count_current": 0,
+            "retry_backoff_seconds": 0,
             "last_result": None,
             "last_error": "",
         }
+
+    @staticmethod
+    def _default_full_scan_checkpoint() -> dict[str, Any]:
+        return {
+            "active": False,
+            "interrupted": False,
+            "full_catalog": True,
+            "token": "",
+            "signature": {},
+            "started_at": "",
+            "updated_at": "",
+            "completed_at": "",
+            "resume_count": 0,
+            "categories_total": 0,
+            "categories_done": 0,
+            "current_category_index": 0,
+            "current_page": 1,
+            "mods_discovered": 0,
+            "mods_unique": 0,
+            "retries_total": 0,
+            "last_error": "",
+            "last_error_at": "",
+        }
+
+    def _load_full_scan_checkpoint(self, runtime: dict[str, Any]) -> dict[str, Any]:
+        raw = runtime.get("full_scan_checkpoint")
+        merged = self._default_full_scan_checkpoint()
+        if isinstance(raw, dict):
+            merged.update(raw)
+        return merged
+
+    def _save_full_scan_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        self.store.save_runtime({"full_scan_checkpoint": checkpoint})
+
+    def _clear_full_scan_checkpoint(self) -> None:
+        self._save_full_scan_checkpoint(self._default_full_scan_checkpoint())
 
     def _set_discover_progress(self, **kwargs: Any) -> None:
         with self._discover_progress_lock:
@@ -374,6 +418,68 @@ class ModUpdater:
         mod["thumbnail_cached_url"] = details.get("thumbnail_cached_url", "")
         return details
 
+    def _merge_discovered_item(
+        self,
+        by_id: dict[str, dict[str, Any]],
+        item: dict[str, Any],
+        *,
+        manager_root_subdir: str,
+        full_catalog: bool,
+        run_downloads: dict[str, int],
+    ) -> None:
+        mod_id = str(item["id"])
+        category_id = str(item.get("category_id") or "")
+        category_name = str(item.get("category_name") or "")
+        discovered_downloads = int(item.get("downloads_count") or 0)
+        run_downloads[mod_id] = max(run_downloads.get(mod_id, 0), discovered_downloads)
+        downloads_count = run_downloads[mod_id]
+        thumbnail_url = str(item.get("thumbnail_url") or "")
+
+        if mod_id in by_id:
+            by_id[mod_id]["title"] = item["title"]
+            by_id[mod_id]["url"] = item["url"]
+            if full_catalog:
+                by_id[mod_id]["downloads_count"] = downloads_count
+            else:
+                by_id[mod_id]["downloads_count"] = max(int(by_id[mod_id].get("downloads_count") or 0), downloads_count)
+            by_id[mod_id]["popularity_cached_at"] = _now_iso()
+            if not by_id[mod_id].get("thumbnail_url") and thumbnail_url:
+                by_id[mod_id]["thumbnail_url"] = thumbnail_url
+            if category_id:
+                if not by_id[mod_id].get("category_id"):
+                    by_id[mod_id]["category_id"] = category_id
+                if not by_id[mod_id].get("category_name"):
+                    by_id[mod_id]["category_name"] = category_name
+
+                category_ids = {str(x) for x in (by_id[mod_id].get("category_ids", []) or []) if str(x).strip()}
+                category_ids.add(category_id)
+                by_id[mod_id]["category_ids"] = sorted(
+                    category_ids,
+                    key=lambda x: int(x) if x.isdigit() else x,
+                )
+
+            by_id[mod_id]["install_subdir"] = _default_mod_entry(
+                mod_id,
+                item["title"],
+                item["url"],
+                manager_root_subdir,
+                category_id,
+                category_name,
+                downloads_count,
+                thumbnail_url,
+            )["install_subdir"]
+        else:
+            by_id[mod_id] = _default_mod_entry(
+                mod_id,
+                item["title"],
+                item["url"],
+                manager_root_subdir,
+                category_id,
+                category_name,
+                downloads_count,
+                thumbnail_url,
+            )
+
     def discover(
         self,
         scan_pages: int | None = None,
@@ -386,12 +492,56 @@ class ModUpdater:
         self._begin_discover_progress(scan_pages=scan_pages, full_catalog=full_catalog)
         try:
             settings = self.store.get_settings()
+            runtime_state = self.store.get_runtime()
             use_remote_images = self._use_remote_images(settings)
             manager_root_subdir = str(settings.get("manager_root_subdir") or "_LL_MOD_MANAGER")
             found: list[dict[str, Any]] = []
+            found_count = 0
             categories: list[dict[str, Any]] = []
             partial_catalog = False
             unique_found_ids: set[str] = set()
+            retries_total = 0
+            checkpoint_status = "idle"
+            checkpoint_saved_at = ""
+
+            current = self.store.get_mods()
+            by_id = {m["id"]: m for m in current}
+            run_downloads: dict[str, int] = {}
+
+            checkpoint = self._default_full_scan_checkpoint()
+            dirty_mods = False
+            pages_since_flush = 0
+
+            def sorted_mods(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                out = list(values)
+                out.sort(key=lambda m: int(m["id"]) if str(m["id"]).isdigit() else str(m["id"]))
+                return out
+
+            def flush_partial_state(*, force_checkpoint: bool = False) -> None:
+                nonlocal dirty_mods, pages_since_flush, checkpoint_saved_at
+
+                if dirty_mods:
+                    self.store.save_mods(sorted_mods(list(by_id.values())))
+                    dirty_mods = False
+
+                if not full_catalog:
+                    return
+
+                flush_every = max(1, int(settings.get("full_scan_checkpoint_flush_pages", 3)))
+                if force_checkpoint or pages_since_flush >= flush_every:
+                    checkpoint["updated_at"] = _now_iso()
+                    self._save_full_scan_checkpoint(checkpoint)
+                    checkpoint_saved_at = str(checkpoint.get("updated_at") or "")
+                    self._set_discover_progress(
+                        last_checkpoint_at=checkpoint_saved_at,
+                        checkpoint_status=checkpoint_status,
+                        checkpoint_category_index=int(checkpoint.get("current_category_index", 0) or 0),
+                        checkpoint_page=int(checkpoint.get("current_page", 1) or 1),
+                        retries_total=int(checkpoint.get("retries_total", 0) or 0),
+                    )
+                    pages_since_flush = 0
+
+            scan_token = ""
 
             if full_catalog:
                 self._set_discover_progress(stage="loading_categories")
@@ -404,126 +554,285 @@ class ModUpdater:
                 category_delay = max(0.0, float(settings.get("catalog_category_delay_seconds", 2)))
                 max_categories = int(settings.get("catalog_max_categories_per_run", 0))
                 partial_catalog = bool(max_pages is not None or max_categories > 0)
+                resume_enabled = bool(settings.get("full_scan_resume_enabled", True))
+
+                retry_max_attempts = max(0, int(settings.get("full_scan_max_retries_per_step", 5)))
+                retry_base_seconds = max(1.0, float(settings.get("full_scan_retry_base_seconds", 5)))
+                retry_max_seconds = max(retry_base_seconds, float(settings.get("full_scan_retry_max_seconds", 300)))
 
                 eligible_categories = [c for c in categories if int(c.get("count") or 0) > 0]
                 if max_categories > 0:
                     eligible_categories = eligible_categories[:max_categories]
 
+                category_ids = [str(c.get("id") or "") for c in eligible_categories]
+                signature = {
+                    "category_ids": category_ids,
+                    "max_pages": int(max_pages or 0),
+                    "max_categories": max_categories,
+                    "refresh_cache": bool(refresh_cache),
+                    "image_source_mode": self._image_source_mode(settings),
+                }
+
+                previous_checkpoint = self._load_full_scan_checkpoint(runtime_state)
+                can_resume = (
+                    resume_enabled
+                    and bool(previous_checkpoint.get("active"))
+                    and bool(previous_checkpoint.get("interrupted"))
+                    and previous_checkpoint.get("signature") == signature
+                    and bool(previous_checkpoint.get("token"))
+                )
+
+                start_category_index = 0
+                start_page = 1
+
+                if can_resume:
+                    checkpoint = previous_checkpoint
+                    scan_token = str(checkpoint.get("token") or _now_iso())
+                    start_category_index = max(0, int(checkpoint.get("current_category_index", 0) or 0))
+                    start_page = max(1, int(checkpoint.get("current_page", 1) or 1))
+                    retries_total = max(0, int(checkpoint.get("retries_total", 0) or 0))
+                    checkpoint["interrupted"] = False
+                    checkpoint["resume_count"] = int(checkpoint.get("resume_count", 0) or 0) + 1
+                    checkpoint["updated_at"] = _now_iso()
+                    checkpoint_saved_at = str(checkpoint.get("updated_at") or "")
+                    checkpoint_status = "resumed"
+                    self._save_full_scan_checkpoint(checkpoint)
+
+                    for mod in by_id.values():
+                        if str(mod.get("last_full_scan_token") or "") == scan_token:
+                            unique_found_ids.add(str(mod.get("id") or ""))
+
+                    found_count = max(int(checkpoint.get("mods_discovered", 0) or 0), len(unique_found_ids))
+
+                    self._set_discover_progress(
+                        resumed_from_checkpoint=True,
+                        checkpoint_status="resumed",
+                        checkpoint_category_index=start_category_index,
+                        checkpoint_page=start_page,
+                        last_checkpoint_at=checkpoint_saved_at,
+                        retries_total=retries_total,
+                        mods_discovered=found_count,
+                        mods_unique=len(unique_found_ids),
+                    )
+                else:
+                    scan_token = _now_iso()
+                    checkpoint = self._default_full_scan_checkpoint()
+                    checkpoint.update(
+                        {
+                            "active": True,
+                            "interrupted": False,
+                            "full_catalog": True,
+                            "token": scan_token,
+                            "signature": signature,
+                            "started_at": _now_iso(),
+                            "updated_at": _now_iso(),
+                            "categories_total": len(eligible_categories),
+                            "categories_done": 0,
+                            "current_category_index": 0,
+                            "current_page": 1,
+                            "mods_discovered": 0,
+                            "mods_unique": 0,
+                            "retries_total": 0,
+                            "last_error": "",
+                            "last_error_at": "",
+                        }
+                    )
+                    checkpoint_saved_at = str(checkpoint.get("updated_at") or "")
+                    checkpoint_status = "running"
+                    self._save_full_scan_checkpoint(checkpoint)
+                    self._set_discover_progress(
+                        resumed_from_checkpoint=False,
+                        checkpoint_status="running",
+                        checkpoint_category_index=0,
+                        checkpoint_page=1,
+                        last_checkpoint_at=checkpoint_saved_at,
+                    )
+
                 self._set_discover_progress(
                     stage="discovering_categories",
                     categories_total=len(eligible_categories),
-                    categories_done=0,
+                    categories_done=min(start_category_index, len(eligible_categories)),
                 )
 
-                for index, category in enumerate(eligible_categories):
-                    found_before_category = len(found)
+                for index in range(start_category_index, len(eligible_categories)):
+                    category = eligible_categories[index]
                     category_pages_total = 0
+                    resume_page = start_page if index == start_category_index else 1
 
-                    def on_category_page(page: int, total_pages: int, category_unique_count: int) -> None:
-                        nonlocal category_pages_total
-                        category_pages_total = int(total_pages)
-                        page_discovered = found_before_category + int(category_unique_count)
-                        self._set_discover_progress(
-                            current_category_page=int(page),
-                            current_category_pages=int(total_pages),
-                            mods_discovered=page_discovered,
-                            mods_unique=max(len(unique_found_ids), page_discovered),
-                        )
+                    checkpoint["current_category_index"] = index
+                    checkpoint["current_page"] = resume_page
+                    checkpoint["categories_done"] = index
+                    checkpoint["active"] = True
+                    checkpoint["interrupted"] = False
+                    checkpoint_status = "running"
+                    flush_partial_state(force_checkpoint=True)
 
                     self._set_discover_progress(
                         current_category_id=str(category.get("id") or ""),
                         current_category_name=str(category.get("name") or ""),
-                        current_category_page=0,
+                        current_category_page=max(0, resume_page - 1),
                         current_category_pages=0,
+                        categories_done=index,
+                        checkpoint_category_index=index,
+                        checkpoint_page=resume_page,
+                        checkpoint_status=checkpoint_status,
                     )
 
-                    category_items = discover_mods_in_category(
-                        category,
-                        settings,
-                        max_pages=max_pages,
-                        page_delay_seconds=page_delay,
-                        on_page=on_category_page,
-                    )
-                    found.extend(category_items)
-                    for item in category_items:
-                        unique_found_ids.add(str(item.get("id")))
+                    attempt = 0
+                    while True:
+                        attempt += 1
 
-                    self._set_discover_progress(
-                        categories_done=index + 1,
-                        mods_discovered=len(found),
-                        mods_unique=len(unique_found_ids),
-                        current_category_page=category_pages_total,
-                    )
+                        def on_category_page(page: int, total_pages: int, _category_unique_count: int, page_items: list[dict[str, Any]]) -> None:
+                            nonlocal category_pages_total, found_count, dirty_mods, pages_since_flush
+                            category_pages_total = int(total_pages)
 
+                            for page_item in page_items:
+                                mod_id = str(page_item.get("id") or "")
+                                if not mod_id:
+                                    continue
+                                found.append(page_item)
+                                found_count += 1
+                                unique_found_ids.add(mod_id)
+                                self._merge_discovered_item(
+                                    by_id,
+                                    page_item,
+                                    manager_root_subdir=manager_root_subdir,
+                                    full_catalog=True,
+                                    run_downloads=run_downloads,
+                                )
+                                target = by_id.get(mod_id)
+                                if target is not None:
+                                    target["last_full_scan_token"] = scan_token
+                                dirty_mods = True
+
+                            if page < total_pages:
+                                checkpoint["current_category_index"] = index
+                                checkpoint["current_page"] = page + 1
+                                checkpoint["categories_done"] = index
+                            else:
+                                checkpoint["current_category_index"] = index + 1
+                                checkpoint["current_page"] = 1
+                                checkpoint["categories_done"] = index + 1
+
+                            checkpoint["mods_discovered"] = found_count
+                            checkpoint["mods_unique"] = len(unique_found_ids)
+                            checkpoint["retries_total"] = retries_total
+                            checkpoint["last_error"] = ""
+                            checkpoint["interrupted"] = False
+
+                            pages_since_flush += 1
+
+                            self._set_discover_progress(
+                                current_category_page=int(page),
+                                current_category_pages=int(total_pages),
+                                mods_discovered=found_count,
+                                mods_unique=len(unique_found_ids),
+                                categories_done=int(checkpoint.get("categories_done", 0) or 0),
+                                checkpoint_category_index=int(checkpoint.get("current_category_index", 0) or 0),
+                                checkpoint_page=int(checkpoint.get("current_page", 1) or 1),
+                                retries_total=retries_total,
+                                retry_count_current=0,
+                                retry_backoff_seconds=0,
+                            )
+                            flush_partial_state()
+
+                        try:
+                            discover_mods_in_category(
+                                category,
+                                settings,
+                                max_pages=max_pages,
+                                page_delay_seconds=page_delay,
+                                start_page=resume_page,
+                                on_page=on_category_page,
+                            )
+
+                            checkpoint["categories_done"] = index + 1
+                            checkpoint["current_category_index"] = index + 1
+                            checkpoint["current_page"] = 1
+                            checkpoint["mods_discovered"] = found_count
+                            checkpoint["mods_unique"] = len(unique_found_ids)
+                            checkpoint["last_error"] = ""
+                            checkpoint["interrupted"] = False
+                            checkpoint_status = "running"
+                            flush_partial_state(force_checkpoint=True)
+
+                            self._set_discover_progress(
+                                categories_done=index + 1,
+                                mods_discovered=found_count,
+                                mods_unique=len(unique_found_ids),
+                                current_category_page=category_pages_total,
+                                retries_total=retries_total,
+                                retry_count_current=0,
+                                retry_backoff_seconds=0,
+                                checkpoint_status=checkpoint_status,
+                            )
+                            break
+                        except Exception as exc:
+                            retries_total += 1
+                            checkpoint["retries_total"] = retries_total
+                            checkpoint["interrupted"] = True
+                            checkpoint["last_error"] = str(exc)
+                            checkpoint["last_error_at"] = _now_iso()
+                            checkpoint_status = "retrying"
+                            flush_partial_state(force_checkpoint=True)
+
+                            if attempt > retry_max_attempts:
+                                checkpoint_status = "interrupted"
+                                self._set_discover_progress(
+                                    last_error=str(exc),
+                                    checkpoint_status=checkpoint_status,
+                                    retries_total=retries_total,
+                                    retry_count_current=attempt,
+                                    retry_backoff_seconds=0,
+                                )
+                                raise
+
+                            backoff_seconds = min(retry_max_seconds, retry_base_seconds * (2 ** max(0, attempt - 1)))
+                            self._set_discover_progress(
+                                last_error=str(exc),
+                                checkpoint_status=checkpoint_status,
+                                retries_total=retries_total,
+                                retry_count_current=attempt,
+                                retry_backoff_seconds=int(backoff_seconds),
+                            )
+                            time.sleep(backoff_seconds)
+                            resume_page = max(1, int(checkpoint.get("current_page", resume_page) or 1))
+
+                    start_page = 1
                     if category_delay > 0 and index < len(eligible_categories) - 1:
                         time.sleep(category_delay)
+
+                checkpoint["active"] = False
+                checkpoint["interrupted"] = False
+                checkpoint["completed_at"] = _now_iso()
+                checkpoint_status = "completed"
+                flush_partial_state(force_checkpoint=True)
+                self._clear_full_scan_checkpoint()
             else:
                 self._set_discover_progress(stage="discovering_pages")
                 pages = int(scan_pages or settings.get("scan_pages", 5))
                 found = discover_mods(pages, settings)
                 unique_found_ids = {str(x.get("id")) for x in found}
+                found_count = len(found)
                 self._set_discover_progress(mods_discovered=len(found), mods_unique=len(unique_found_ids))
 
             self._set_discover_progress(stage="merging_mods")
-            current = self.store.get_mods()
-            by_id = {m["id"]: m for m in current}
-            run_downloads: dict[str, int] = {}
-
-            for item in found:
-                mod_id = str(item["id"])
-                category_id = str(item.get("category_id") or "")
-                category_name = str(item.get("category_name") or "")
-                discovered_downloads = int(item.get("downloads_count") or 0)
-                run_downloads[mod_id] = max(run_downloads.get(mod_id, 0), discovered_downloads)
-                downloads_count = run_downloads[mod_id]
-                thumbnail_url = str(item.get("thumbnail_url") or "")
-                if mod_id in by_id:
-                    by_id[mod_id]["title"] = item["title"]
-                    by_id[mod_id]["url"] = item["url"]
-                    if full_catalog:
-                        by_id[mod_id]["downloads_count"] = downloads_count
-                    else:
-                        by_id[mod_id]["downloads_count"] = max(int(by_id[mod_id].get("downloads_count") or 0), downloads_count)
-                    by_id[mod_id]["popularity_cached_at"] = _now_iso()
-                    if not by_id[mod_id].get("thumbnail_url") and thumbnail_url:
-                        by_id[mod_id]["thumbnail_url"] = thumbnail_url
-                    if category_id:
-                        if not by_id[mod_id].get("category_id"):
-                            by_id[mod_id]["category_id"] = category_id
-                        if not by_id[mod_id].get("category_name"):
-                            by_id[mod_id]["category_name"] = category_name
-
-                        category_ids = {str(x) for x in (by_id[mod_id].get("category_ids", []) or []) if str(x).strip()}
-                        category_ids.add(category_id)
-                        by_id[mod_id]["category_ids"] = sorted(
-                            category_ids,
-                            key=lambda x: int(x) if x.isdigit() else x,
-                        )
-
-                    by_id[mod_id]["install_subdir"] = _default_mod_entry(
-                        mod_id,
-                        item["title"],
-                        item["url"],
-                        manager_root_subdir,
-                        category_id,
-                        category_name,
-                        downloads_count,
-                        thumbnail_url,
-                    )["install_subdir"]
-                else:
-                    by_id[mod_id] = _default_mod_entry(
-                        mod_id,
-                        item["title"],
-                        item["url"],
-                        manager_root_subdir,
-                        category_id,
-                        category_name,
-                        downloads_count,
-                        thumbnail_url,
+            if not full_catalog:
+                for item in found:
+                    self._merge_discovered_item(
+                        by_id,
+                        item,
+                        manager_root_subdir=manager_root_subdir,
+                        full_catalog=False,
+                        run_downloads=run_downloads,
                     )
 
             if full_catalog and not partial_catalog:
-                discovered_ids = {str(x.get("id")) for x in found}
+                discovered_ids = {
+                    str(mod.get("id"))
+                    for mod in by_id.values()
+                    if str(mod.get("last_full_scan_token") or "") == scan_token
+                }
                 merged = [
                     m
                     for m in by_id.values()
@@ -604,17 +913,33 @@ class ModUpdater:
             merged.sort(key=lambda m: int(m["id"]) if str(m["id"]).isdigit() else str(m["id"]))
             self.store.save_mods(merged)
             result = {
-                "discovered": len(found),
-                "unique_discovered": len({str(x.get('id')) for x in found}),
+                "discovered": found_count if full_catalog else len(found),
+                "unique_discovered": len(unique_found_ids) if full_catalog else len({str(x.get('id')) for x in found}),
                 "categories": len(categories),
                 "total": len(merged),
                 "details_refreshed": details_refreshed,
                 "details_errors": details_errors,
                 "thumbnails_cached": thumbnails_cached,
             }
+            self._set_discover_progress(
+                checkpoint_status="completed" if full_catalog else self.get_discover_progress().get("checkpoint_status", "idle"),
+                retries_total=retries_total,
+                retry_count_current=0,
+                retry_backoff_seconds=0,
+                last_checkpoint_at=checkpoint_saved_at,
+            )
             self._finish_discover_progress(result=result)
             return result
         except Exception as exc:
+            if full_catalog:
+                runtime_after_error = self.store.get_runtime()
+                checkpoint_error = self._load_full_scan_checkpoint(runtime_after_error)
+                checkpoint_error["active"] = True
+                checkpoint_error["interrupted"] = True
+                checkpoint_error["last_error"] = str(exc)
+                checkpoint_error["last_error_at"] = _now_iso()
+                checkpoint_error["updated_at"] = checkpoint_error["last_error_at"]
+                self._save_full_scan_checkpoint(checkpoint_error)
             self._finish_discover_progress(error=str(exc))
             raise
         finally:

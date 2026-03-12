@@ -29,6 +29,26 @@ DEFAULT_RUNTIME = {
     "lazy_new_mods_cursor": 0,
     "lazy_new_mods_failed_categories": [],
     "lazy_cache_retry_cursor": 0,
+    "full_scan_checkpoint": {
+        "active": False,
+        "interrupted": False,
+        "full_catalog": True,
+        "token": "",
+        "signature": {},
+        "started_at": "",
+        "updated_at": "",
+        "completed_at": "",
+        "resume_count": 0,
+        "categories_total": 0,
+        "categories_done": 0,
+        "current_category_index": 0,
+        "current_page": 1,
+        "mods_discovered": 0,
+        "mods_unique": 0,
+        "retries_total": 0,
+        "last_error": "",
+        "last_error_at": "",
+    },
 }
 
 
