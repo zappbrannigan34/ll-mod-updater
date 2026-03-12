@@ -1,0 +1,70 @@
+name: Build And Release Windows EXE
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (example: v0.1.2)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build one-file executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name "LL-Sims4-Mod-Manager" --add-data "templates;templates" --add-data "static;static" launcher.py
+
+      - name: Resolve release tag
+        id: vars
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+          } elseif ("${{ inputs.tag }}" -ne "") {
+            $tag = "${{ inputs.tag }}"
+          } else {
+            $tag = "manual-${{ github.run_number }}"
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LL-Sims4-Mod-Manager-exe
+          path: dist/LL-Sims4-Mod-Manager.exe
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: ${{ steps.vars.outputs.tag }}
+          files: dist/LL-Sims4-Mod-Manager.exe
+          generate_release_notes: true

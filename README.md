@@ -107,3 +107,20 @@ python launcher.py
 - `data/queue.json` — внутренняя очередь установок
 - `data/runtime.json` — runtime-лимиты/cursor-и
 - `data/media_cache/` — локальный кеш картинок (если режим cache)
+
+## Релиз через GitHub Actions (для сопровождения)
+
+Пайплайн релиза полностью через GitHub Actions:
+
+1. Создай тег версии (например `v0.1.2`) и отправь его в `origin`.
+2. Workflow `.github/workflows/release.yml` автоматически:
+   - собирает `LL-Sims4-Mod-Manager.exe` на `windows-latest`,
+   - публикует `.exe` в GitHub Release этого тега,
+   - сохраняет `.exe` как workflow artifact.
+
+Команды:
+
+```bash
+git tag v0.1.2
+git push origin v0.1.2
+```
