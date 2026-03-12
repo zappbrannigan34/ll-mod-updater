@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,82 +8,129 @@
   </head>
   <body>
     <main class="container">
-      <h1>LL Sims 4 Auto Updater</h1>
+      <h1 id="app_title">LL Sims 4 Auto Updater</h1>
 
-      <section class="panel">
-        <h2>Настройки</h2>
+      <div class="tabs" role="tablist" aria-label="Main Tabs">
+        <button id="tab_btn_mods" class="tab-button active" data-tab="mods" type="button">Mods</button>
+        <button id="tab_btn_actions" class="tab-button" data-tab="actions" type="button">Actions</button>
+        <button id="tab_btn_settings" class="tab-button" data-tab="settings" type="button">Settings</button>
+        <button id="tab_btn_log" class="tab-button" data-tab="log" type="button">Log</button>
+      </div>
+
+      <section class="panel tab-pane" data-tab-pane="settings">
+        <h2 id="settings_title">Settings</h2>
         <div class="grid">
-          <label>Папка Mods
-            <input id="mods_dir" type="text" />
+          <label class="full"><span id="lbl_mods_dir">Mods folder</span>
+            <div class="row">
+              <input id="mods_dir" type="text" />
+              <button id="pick_mods_dir" type="button">Pick folder</button>
+            </div>
           </label>
-          <label>Метод деплоя
+          <label><span id="lbl_manager_root_subdir">Manager root subfolder</span>
+            <input id="manager_root_subdir" type="text" placeholder="_LL_MOD_MANAGER" />
+          </label>
+          <label><span id="lbl_ui_language">Interface language</span>
+            <select id="ui_language">
+              <option value="auto">Auto (browser)</option>
+              <option value="en">English</option>
+              <option value="ru">Russian</option>
+            </select>
+          </label>
+          <label><span id="lbl_image_source_mode">Image source mode</span>
+            <select id="image_source_mode">
+              <option value="cache">Local cache (recommended)</option>
+              <option value="remote">Direct from site</option>
+            </select>
+          </label>
+          <label><span id="lbl_deploy_method">Deploy method</span>
             <select id="deploy_method">
-              <option value="copy">copy</option>
               <option value="hardlink">hardlink</option>
+              <option value="copy">copy</option>
               <option value="symlink">symlink</option>
             </select>
           </label>
-          <label>Сканировать страниц каталога
-            <input id="scan_pages" type="number" min="1" max="400" />
+          <label><span id="lbl_catalog_max_pages_per_category">Max pages/category (0=all)</span>
+            <input id="catalog_max_pages_per_category" type="number" min="0" />
           </label>
-          <label>Интервал автообновления (мин)
+          <label><span id="lbl_poll_minutes">Auto-check interval (minutes)</span>
             <input id="poll_minutes" type="number" min="1" />
           </label>
-          <label>Тик очереди (сек)
+          <label><span id="lbl_queue_poll_seconds">Queue tick (seconds)</span>
             <input id="queue_poll_seconds" type="number" min="2" />
           </label>
-          <label>Max metadata/check run
+          <label><span id="lbl_max_metadata_checks_per_run">Max metadata checks per run</span>
             <input id="max_metadata_checks_per_run" type="number" min="1" />
           </label>
-          <label>Metadata delay min (сек)
+          <label><span id="lbl_metadata_min_delay_seconds">Metadata delay min (seconds)</span>
             <input id="metadata_min_delay_seconds" type="number" min="0" />
           </label>
-          <label>Metadata delay max (сек)
+          <label><span id="lbl_metadata_max_delay_seconds">Metadata delay max (seconds)</span>
             <input id="metadata_max_delay_seconds" type="number" min="0" />
           </label>
-          <label>Download delay min (сек)
+          <label><span id="lbl_download_min_delay_seconds">Download delay min (seconds)</span>
             <input id="download_min_delay_seconds" type="number" min="0" />
           </label>
-          <label>Download delay max (сек)
+          <label><span id="lbl_download_max_delay_seconds">Download delay max (seconds)</span>
             <input id="download_max_delay_seconds" type="number" min="0" />
           </label>
-          <label>Max downloads/hour
+          <label><span id="lbl_max_downloads_per_hour">Max downloads/hour</span>
             <input id="max_downloads_per_hour" type="number" min="1" />
           </label>
-          <label>Max downloads/day
+          <label><span id="lbl_max_downloads_per_day">Max downloads/day</span>
             <input id="max_downloads_per_day" type="number" min="1" />
           </label>
-          <label>Backoff base (мин)
+          <label><span id="lbl_backoff_base_minutes">Backoff base (minutes)</span>
             <input id="backoff_base_minutes" type="number" min="1" />
           </label>
-          <label>Backoff max (мин)
+          <label><span id="lbl_backoff_max_minutes">Backoff max (minutes)</span>
             <input id="backoff_max_minutes" type="number" min="1" />
           </label>
-          <label>Retry limit per item
+          <label><span id="lbl_queue_retry_limit">Retry limit per item</span>
             <input id="queue_retry_limit" type="number" min="1" />
           </label>
-          <label>Cooldown on 429 (мин)
+          <label><span id="lbl_cooldown_429_minutes">Cooldown on 429 (minutes)</span>
             <input id="cooldown_429_minutes" type="number" min="1" />
           </label>
-          <label>Cooldown on 503 (мин)
+          <label><span id="lbl_cooldown_503_minutes">Cooldown on 503 (minutes)</span>
             <input id="cooldown_503_minutes" type="number" min="1" />
           </label>
-          <label>Hard cooldown (часы)
+          <label><span id="lbl_cooldown_hard_block_hours">Hard cooldown (hours)</span>
             <input id="cooldown_hard_block_hours" type="number" min="1" />
           </label>
-          <label class="full">Cookie (из залогиненного браузера)
+          <label><span id="lbl_download_backend">Download backend</span>
+            <select id="download_backend">
+              <option value="cdp_preferred">cdp_preferred</option>
+              <option value="cdp">cdp only</option>
+              <option value="http_preferred">http_preferred</option>
+              <option value="http">http only</option>
+            </select>
+          </label>
+          <label><span id="lbl_cdp_endpoint">CDP endpoint</span>
+            <input id="cdp_endpoint" type="text" placeholder="http://127.0.0.1:9222" />
+          </label>
+          <label><span id="lbl_cdp_download_timeout_seconds">CDP download timeout (seconds)</span>
+            <input id="cdp_download_timeout_seconds" type="number" min="30" />
+          </label>
+          <label>
+            <input id="proxy_enabled" type="checkbox" />
+            <span id="lbl_proxy_enabled">Use proxy for all LoversLab connections</span>
+          </label>
+          <label class="full"><span id="lbl_proxy_url">Proxy URL</span>
+            <input id="proxy_url" type="text" placeholder="http://user:pass@host:port" />
+          </label>
+          <label class="full"><span id="lbl_ll_cookie">Cookie (from logged-in browser)</span>
             <textarea id="ll_cookie" rows="2"></textarea>
           </label>
-          <label class="full">User-Agent
+          <label class="full"><span id="lbl_user_agent">User-Agent</span>
             <input id="user_agent" type="text" />
           </label>
           <label>
             <input id="auto_tracking_enabled" type="checkbox" />
-            Включить автообновление по таймеру
+            <span id="lbl_auto_tracking_enabled">Enable scheduled auto tracking</span>
           </label>
           <label>
             <input id="queue_worker_enabled" type="checkbox" />
-            Включить обработку очереди
+            <span id="lbl_queue_worker_enabled">Enable queue worker</span>
           </label>
         </div>
         <div class="row">
@@ -91,14 +138,21 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Действия</h2>
+      <section class="panel tab-pane" data-tab-pane="actions">
+        <h2 id="actions_title">Actions</h2>
         <div class="row">
-          <button id="discover">Обновить список модов</button>
-          <button id="check_only">Проверить обновления</button>
-          <button id="update_enabled">Поставить обновления в очередь</button>
-          <button id="process_queue_once">Обработать 1 элемент очереди</button>
-          <button id="clear_done_queue">Очистить done из очереди</button>
+          <button id="discover">Full sync + cache refresh</button>
+          <button id="discover_quick">Check updates now</button>
+        </div>
+        <div class="discover-progress" id="discover_progress_panel">
+          <div class="discover-progress-head">
+            <strong id="discover_progress_title">Full scan progress</strong>
+            <span id="discover_progress_percent">0%</span>
+          </div>
+          <div class="discover-progress-track">
+            <div id="discover_progress_bar"></div>
+          </div>
+          <pre id="discover_progress_text">No scan running.</pre>
         </div>
         <div class="row">
           <input id="custom_url" type="text" placeholder="https://www.loverslab.com/files/file/..." />
@@ -106,31 +160,64 @@
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Моды</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Auto</th>
-              <th>ID</th>
-              <th>Название</th>
-              <th>Текущая</th>
-              <th>Удаленная</th>
-              <th>Статус</th>
-              <th>Папка установки</th>
-            </tr>
-          </thead>
-          <tbody id="mods_table"></tbody>
-        </table>
+      <section class="panel tab-pane active" data-tab-pane="mods">
+        <h2 id="categories_title">Sims 4 Categories</h2>
+        <div id="categories_list" class="categories-grid"></div>
       </section>
 
-      <section class="panel">
-        <h2>Очередь</h2>
-        <pre id="queue_info"></pre>
+      <section class="panel tab-pane active" data-tab-pane="mods">
+        <h2 id="mods_title">Mods</h2>
+        <div class="row">
+          <input id="mods_search" type="text" placeholder="Поиск по названию/ID..." />
+          <select id="mods_enabled_filter">
+            <option value="all">All mods</option>
+            <option value="enabled">Enabled only</option>
+            <option value="disabled">Disabled only</option>
+          </select>
+          <select id="mods_category_filter">
+            <option value="">Все категории</option>
+          </select>
+          <select id="mods_sort">
+            <option value="downloads_desc">Popularity (downloads)</option>
+            <option value="title_asc">Title A-Z</option>
+            <option value="title_desc">Title Z-A</option>
+            <option value="id_desc">ID desc</option>
+            <option value="id_asc">ID asc</option>
+          </select>
+          <button id="mods_update_enabled" type="button">Update enabled mods</button>
+          <button id="mods_clear_filters" type="button">Сбросить фильтры</button>
+        </div>
+        <div class="mods-layout">
+          <div class="mods-list-pane">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th id="th_auto">Auto</th>
+                    <th id="th_id">ID</th>
+                    <th id="th_title">Title</th>
+                    <th id="th_category">Category</th>
+                    <th id="th_local">Local</th>
+                    <th id="th_remote">Remote</th>
+                    <th id="th_downloads">Downloads</th>
+                    <th id="th_status">Status</th>
+                    <th id="th_install">Install Subdir</th>
+                  </tr>
+                </thead>
+                <tbody id="mods_table"></tbody>
+              </table>
+            </div>
+          </div>
+          <aside class="mods-details-pane">
+            <h2 id="details_title">Mod Details</h2>
+            <button id="refresh_details" type="button">Refresh Details</button>
+            <div id="mod_details_card" class="details-card"></div>
+          </aside>
+        </div>
       </section>
 
-      <section class="panel">
-        <h2>Лог</h2>
+      <section class="panel tab-pane" data-tab-pane="log">
+        <h2 id="log_title">Log</h2>
         <pre id="log"></pre>
       </section>
     </main>

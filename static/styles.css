@@ -20,9 +20,39 @@ body {
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 1920px;
+  width: calc(100vw - 12px);
   margin: 0 auto;
-  padding: 16px;
+  padding: 8px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tab-button {
+  border: 1px solid var(--line);
+  background: #111827;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 12px;
+}
+
+.tab-button.active {
+  color: var(--text);
+  border-color: #22c55e;
+  background: #0f2a1d;
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
 }
 
 h1 {
@@ -33,8 +63,8 @@ h1 {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
 }
 
 .grid {
@@ -65,6 +95,10 @@ button {
   padding: 8px;
 }
 
+input[type="text"] {
+  min-width: 240px;
+}
+
 button {
   cursor: pointer;
 }
@@ -74,14 +108,74 @@ button:hover {
 }
 
 .row {
-  margin-top: 10px;
+  margin-top: 8px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
+.row > input[type="text"],
+.row > select {
+  flex: 1 1 220px;
+}
+
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.category-chip {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #0f172a;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.category-chip.active {
+  border-color: var(--accent);
+  background: #143325;
+}
+
+.mods-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.mods-list-pane {
+  min-width: 0;
+}
+
+.mods-details-pane {
+  position: sticky;
+  top: 8px;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.category-chip-name {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.category-chip-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 table {
   width: 100%;
+  min-width: 980px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -92,6 +186,29 @@ td {
   padding: 8px;
   text-align: left;
   vertical-align: top;
+  white-space: nowrap;
+}
+
+#mods_table td:nth-child(3),
+#mods_table td:nth-child(8),
+#mods_table td:nth-child(9) {
+  white-space: normal;
+}
+
+.mod-title-link {
+  display: inline-block;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#mods_table tr {
+  cursor: pointer;
+}
+
+#mods_table tr.selected-row {
+  background: rgba(34, 197, 94, 0.12);
 }
 
 th {
@@ -106,11 +223,97 @@ pre {
   overflow: auto;
 }
 
+.discover-progress {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #0f172a;
+}
+
+.discover-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.discover-progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #111827;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+#discover_progress_bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+  transition: width 0.25s ease;
+}
+
+#discover_progress_text {
+  max-height: 180px;
+}
+
+.details-card {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #0f172a;
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.details-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.details-meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.details-summary {
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.details-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.details-images img {
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+  object-fit: contain;
+  background: #0b1220;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
 a {
   color: #7dd3fc;
 }
 
 @media (max-width: 800px) {
+  .mods-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mods-details-pane {
+    position: static;
+  }
+
   table,
   thead,
   tbody,
