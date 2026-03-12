@@ -2,4 +2,8 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.venv_smoke/
+build/
+dist/
+*.spec
 data/
