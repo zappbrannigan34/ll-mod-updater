@@ -1775,7 +1775,7 @@ class ModUpdater:
                 "wait_seconds": wait,
             }
 
-    def reset_runtime_limits(self) -> dict[str, Any]:
+    def reset_runtime_limits(self, clear_queue_wait: bool = True) -> dict[str, Any]:
         runtime = self.store.save_runtime(
             {
                 "next_download_after": "",
@@ -1785,6 +1785,25 @@ class ModUpdater:
                 "last_error": "",
             }
         )
+        cleared_wait_items = 0
+        if clear_queue_wait:
+            queue = self.store.get_queue()
+            changed = False
+            for item in queue:
+                if item.get("state") not in {"queued", "retry", "in_progress"}:
+                    continue
+                if item.get("not_before"):
+                    item["not_before"] = ""
+                    item["updated_at"] = _now_iso()
+                    changed = True
+                    cleared_wait_items += 1
+                if item.get("state") == "in_progress":
+                    item["state"] = "queued"
+                    item["updated_at"] = _now_iso()
+                    changed = True
+            if changed:
+                self.store.save_queue(queue)
+        runtime["cleared_queue_wait_items"] = cleared_wait_items
         return runtime
 
     def clear_completed_queue(self) -> dict[str, int]:

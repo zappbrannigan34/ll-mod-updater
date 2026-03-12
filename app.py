@@ -70,8 +70,23 @@ def api_save_settings():
     payload = request.get_json(silent=True) or {}
     if bool(payload.get("proxy_enabled", False)) and not str(payload.get("proxy_url") or "").strip():
         return jsonify({"ok": False, "error": "proxy_url is required when proxy_enabled=true"}), 400
+
+    previous = store.get_settings()
     settings = store.save_settings(payload)
-    return jsonify({"ok": True, "settings": settings})
+
+    def _normalize_runtime_critical(src: dict) -> tuple[bool, str, str, str]:
+        return (
+            bool(src.get("proxy_enabled", False)),
+            str(src.get("proxy_url") or "").strip(),
+            str(src.get("ll_cookie") or "").strip(),
+            str(src.get("user_agent") or "").strip(),
+        )
+
+    runtime_reset = None
+    if _normalize_runtime_critical(previous) != _normalize_runtime_critical(settings):
+        runtime_reset = updater.reset_runtime_limits(clear_queue_wait=True)
+
+    return jsonify({"ok": True, "settings": settings, "runtime_reset": runtime_reset})
 
 
 @app.post("/api/pick_mods_dir")
